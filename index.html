@@ -64,7 +64,7 @@
 
   /* worksheet */
   #stage{margin-top:30px;}
-  .sheet{background:#fff;width:210mm;height:296mm;overflow:hidden;margin:0 auto 26px;padding:15mm 16mm 13mm;position:relative;box-shadow:0 24px 60px -30px rgba(20,40,20,.55);color:#15130f;display:flex;flex-direction:column;break-after:page;}
+  .sheet{background:#fff;width:794px;height:1122px;overflow:hidden;margin:0 auto 26px;padding:54px 60px 46px;position:relative;box-shadow:0 24px 60px -30px rgba(20,40,20,.55);color:#15130f;display:flex;flex-direction:column;break-after:page;}
   .sheet:last-child{break-after:auto;}
   .ws-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
   .ws-questions{flex:1 1 auto;display:flex;flex-direction:column;justify-content:space-between;gap:var(--row-gap,9px);min-height:0;}
@@ -91,15 +91,15 @@
 
   /* answer page */
   .answer-tag{display:inline-block;background:var(--answer);color:#fff;font-size:11px;padding:3px 12px;border-radius:14px;letter-spacing:.18em;margin-bottom:4px;}
-  .ans-item{break-inside:avoid;border-bottom:1px dotted #d8d0c0;padding:2px 0;}
-  .ans-item .ai-num{color:var(--accent-deep);font-weight:600;margin-right:6px;}
-  .ans-item .ai-val{color:var(--answer);font-family:'Noto Serif TC',serif;font-weight:500;}
+  .ans-item{break-inside:avoid;border-bottom:1px dotted #d8d0c0;padding:2px 0;white-space:nowrap;overflow:hidden;display:flex;align-items:baseline;}
+  .ans-item .ai-num{color:var(--accent-deep);font-weight:600;margin-right:6px;flex-shrink:0;}
+  .ans-item .ai-val{color:var(--answer);font-family:'Noto Serif TC',serif;font-weight:500;white-space:nowrap;}
 
   @media print{
     body{background:#fff;padding:0;}
     .panel,header.app,.no-print{display:none !important;}
     #stage{margin:0;}
-    .sheet{box-shadow:none;margin:0;width:210mm;height:296mm;page-break-after:always;}
+    .sheet{box-shadow:none;margin:0;width:794px;height:1122px;page-break-after:always;}
     .sheet:last-child{page-break-after:auto;}
     @page{size:A4;margin:0;}
   }
@@ -305,8 +305,8 @@ function buildSheet(cfg,sheetIdx){
   </div>` : '';
 
   // ---- 自適應排版：確保一定不超出 A4 ----
-  // A4 內容區高度 = 297mm - 上16mm - 下14mm ≈ 1009px @96dpi
-  const A4_CONTENT = 1009;
+  // sheet 內容區高度 = 1122px - 上54 - 下46 = 1022px
+  const A4_CONTENT = 1022;
   // footer 現為 flex 文檔流，必須計入；各區實測高度 + 加大安全緩衝
   // (runtime fitAllSheets 會再實測修正，此處保守估算減少縮放介入)
   let fixed = 60 /*head*/ + 28 /*subbar*/ + 44 /*footer含border+padding+margin*/ + 50 /*安全緩衝*/;
@@ -384,9 +384,9 @@ function buildAnswerSheet(allKeys,cfg){
 
   // 每欄大致筆數（含各張標題佔位）
   const linesPerCol = Math.ceil((totalItems + numBlocks*1.4) / cols);
-  // 可用高度：A4內容1009 - head - 標籤 - 說明 - footer - 加大緩衝
+  // 可用高度：內容區1022 - head - 標籤 - 說明 - footer - 加大緩衝
   // (runtime fitAllSheets 會再實測修正)
-  const availH = 1009 - 60 - 32 - 70 - 44 - 55; // ≈ 748px
+  const availH = 1022 - 60 - 32 - 70 - 44 - 55; // ≈ 761px
   // 每行需要的高度（含行距），由可用高度與行數反推，確保不超出
   const maxLineH = availH / linesPerCol;
   // 字體 = 行高 / 倍數；少行時用大倍數(鬆)，多行時收斂
@@ -401,6 +401,14 @@ function buildAnswerSheet(allKeys,cfg){
     lineH = Math.floor(availH / worstLines);
     if(ansFs * 1.5 > lineH) ansFs = Math.max(13, Math.floor(lineH / 1.5));
   }
+  // 依欄寬限制字體：確保最長的答案能單行容納，不換行也不被裁切
+  const contentW = 794 - 60*2;                       // 內容區寬
+  const colW = (contentW - 32*(cols-1)) / cols;       // 每欄寬
+  // 估算一行所需寬度：圈選題最長(兩個兩位數+紅框padding+頓號+標籤)約 13 字身單位
+  const charUnits = 13;
+  const maxFsByWidth = Math.floor(colW / (charUnits * 0.6));
+  if(ansFs > maxFsByWidth) ansFs = Math.max(12, maxFsByWidth);
+  lineH = Math.min(lineH, Math.floor(availH / linesPerCol));
   const numFs = Math.round(ansFs*0.78);
   const tagFs = Math.round(ansFs*0.62);
 
@@ -557,46 +565,66 @@ $('pdfBtn').addEventListener('click',async()=>{
   const btn=$('pdfBtn');
   const old=btn.innerHTML;
   btn.disabled=true; btn.innerHTML='<span class="dl-icon">⏳</span> 產生中…';
-  render(); // 確保最新內容
-  await new Promise(r=>setTimeout(r,250)); // 等字體與版面就緒
-  fitAllSheets(); // 字體載入後再量測一次,確保不溢出
-  await new Promise(r=>setTimeout(r,80));
+  render();
+  await new Promise(r=>setTimeout(r,250));
+  fitAllSheets();
+  await new Promise(r=>setTimeout(r,120));
+
+  // 取得 html2pdf bundle 內含的 html2canvas 與 jsPDF
+  const h2c = window.html2canvas;
+  const JsPDFCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
 
   try{
-    // 取得 html2pdf 內建的 html2canvas 與 jsPDF
-    const h2c = window.html2canvas;
-    const { jsPDF } = (window.jspdf || window.jsPDF) ? (window.jspdf || {jsPDF:window.jsPDF}) : {};
-    const JsPDFCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
-    if(!h2c || !JsPDFCtor){
-      // 後備：仍用 html2pdf 但確保不分頁
-      throw new Error('fallback');
-    }
-    const pdf = new JsPDFCtor({unit:'mm',format:'a4',orientation:'portrait'});
+    if(!h2c || !JsPDFCtor) throw new Error('lib-missing');
+
+    const pdf = new JsPDFCtor({unit:'mm', format:'a4', orientation:'portrait'});
     const A4W = 210, A4H = 297;
     const sheets = document.querySelectorAll('#stage .sheet');
+
     for(let i=0;i<sheets.length;i++){
-      const canvas = await h2c(sheets[i], {scale:2, useCORS:true, backgroundColor:'#ffffff'});
-      const img = canvas.toDataURL('image/jpeg', 0.98);
+      const el = sheets[i];
+      // 暫存並清除會干擾擷取的樣式
+      const prevShadow = el.style.boxShadow;
+      const prevMargin = el.style.margin;
+      el.style.boxShadow = 'none';
+      el.style.margin = '0';
+
+      const canvas = await h2c(el, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        width: el.offsetWidth,
+        height: el.offsetHeight,
+        windowWidth: el.offsetWidth
+      });
+
+      el.style.boxShadow = prevShadow;
+      el.style.margin = prevMargin;
+
+      // 依 canvas 實際比例鋪滿 A4 寬，高度等比；因 sheet 是 A4 比例，高度≈A4H
+      const imgData = canvas.toDataURL('image/jpeg', 0.96);
+      const imgH = canvas.height * A4W / canvas.width; // 等比高度
       if(i>0) pdf.addPage();
-      // 整張鋪滿 A4（sheet 本就是 A4 比例）
-      pdf.addImage(img, 'JPEG', 0, 0, A4W, A4H, undefined, 'FAST');
+      // 置頂鋪滿，高度用等比值（A4 比例下約等於 297，誤差<1mm 不溢頁）
+      pdf.addImage(imgData, 'JPEG', 0, 0, A4W, Math.min(imgH, A4H), undefined, 'FAST');
     }
     pdf.save(`算式比大小認知紙本教案_種子${$('seed').value}.pdf`);
+
   }catch(e){
-    // 後備方案：html2pdf 並停用 css 分頁（每張已是 A4，靠 avoid 防截斷）
+    console.error('主方案失敗，改用後備:', e);
+    // 後備：html2pdf 標準流程，每張 .sheet 前分頁
     try{
-      const stage=$('stage');
       await html2pdf().set({
         margin:0,
         filename:`算式比大小認知紙本教案_種子${$('seed').value}.pdf`,
-        image:{type:'jpeg',quality:0.98},
-        html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff',windowWidth:794},
+        image:{type:'jpeg',quality:0.96},
+        html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff'},
         jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
-        pagebreak:{mode:['css','legacy'],before:'.sheet',avoid:'.qrow'}
-      }).from(stage).save();
+        pagebreak:{mode:'css'}
+      }).from($('stage')).save();
     }catch(e2){
-      alert('PDF 產生失敗，請再試一次。');
-      console.error(e,e2);
+      alert('PDF 產生失敗，請改用瀏覽器列印（Ctrl/Cmd+P）另存 PDF。');
+      console.error(e2);
     }
   }finally{
     btn.disabled=false; btn.innerHTML=old;
