@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>算式比大小工作單生成器</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<style>
+  :root{
+    --ink:#1a1814; --ink-soft:#4a4540;
+    --paper:#f7f3ea; --paper-card:#fffdf8;
+    --line:#d8d0c0; --line-strong:#b8ac95;
+    --accent:#356b5a; --accent-deep:#234a3e;
+    --rule:#2a2620; --answer:#b03a2e;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    font-family:'Noto Sans TC',sans-serif;
+    background:
+      radial-gradient(circle at 18% 8%,#fbf7ef 0%,transparent 55%),
+      radial-gradient(circle at 88% 92%,#eef2ec 0%,transparent 50%),
+      var(--paper);
+    color:var(--ink);line-height:1.6;min-height:100vh;padding:32px 20px 80px;
+  }
+  .shell{max-width:1180px;margin:0 auto;}
+  header.app{text-align:center;margin-bottom:28px;}
+  header.app .eyebrow{font-size:12px;letter-spacing:.4em;color:var(--accent);text-transform:uppercase;margin-bottom:10px;font-weight:500;}
+  header.app h1{font-family:'Noto Serif TC',serif;font-weight:700;font-size:34px;letter-spacing:.06em;}
+  header.app .sub{margin-top:8px;color:var(--ink-soft);font-size:14px;letter-spacing:.05em;}
+  .panel{background:var(--paper-card);border:1px solid var(--line);border-radius:14px;padding:26px 28px;box-shadow:0 1px 0 #fff inset,0 18px 40px -28px rgba(40,60,40,.5);margin-bottom:24px;}
+  .panel h2{font-family:'Noto Serif TC',serif;font-size:16px;letter-spacing:.12em;color:var(--accent-deep);margin-bottom:18px;font-weight:600;display:flex;align-items:center;gap:10px;}
+  .panel h2::before{content:"";width:18px;height:2px;background:var(--accent);display:inline-block;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:20px 26px;}
+  .field label{display:block;font-size:12px;letter-spacing:.14em;color:var(--ink-soft);margin-bottom:8px;font-weight:500;text-transform:uppercase;}
+  select,input[type=text],input[type=number]{width:100%;padding:10px 12px;font-family:inherit;font-size:14px;border:1px solid var(--line-strong);border-radius:8px;background:#fffef9;color:var(--ink);transition:border-color .15s,box-shadow .15s;}
+  select:focus,input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(53,107,90,.15);}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;}
+  .chip{cursor:pointer;user-select:none;font-size:13px;letter-spacing:.06em;padding:8px 14px;border:1px solid var(--line-strong);border-radius:20px;background:#fffef9;transition:all .15s;}
+  .chip.on{background:var(--accent);color:#fff;border-color:var(--accent-deep);box-shadow:0 4px 10px -4px rgba(35,74,62,.6);}
+  .toggles{display:flex;flex-wrap:wrap;gap:18px;align-items:center;}
+  .switch{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;}
+  .switch input{width:18px;height:18px;accent-color:var(--accent);cursor:pointer;}
+  .seedrow{display:flex;gap:10px;align-items:flex-end;}
+  .actions{display:flex;flex-wrap:wrap;gap:14px;margin-top:6px;}
+  button.btn{font-family:'Noto Serif TC',serif;font-size:15px;letter-spacing:.1em;padding:13px 30px;border-radius:10px;border:none;cursor:pointer;font-weight:600;transition:transform .12s,box-shadow .12s,background .15s;}
+  .btn-primary{background:var(--accent-deep);color:#f3faf6;box-shadow:0 10px 24px -10px rgba(35,74,62,.8);}
+  .btn-primary:hover{transform:translateY(-2px);background:#1c3d32;}
+  .btn-ghost{background:transparent;color:var(--accent-deep);border:1px solid var(--line-strong);}
+  .btn-ghost:hover{background:#e7efe9;}
+  .btn-download{
+    background:linear-gradient(135deg,#c75a3a 0%,#b03a2e 100%);
+    color:#fff;font-size:17px;padding:16px 40px;border-radius:12px;
+    box-shadow:0 12px 28px -10px rgba(176,58,46,.7),0 2px 0 #fff inset;
+    display:inline-flex;align-items:center;gap:10px;
+  }
+  .btn-download:hover{transform:translateY(-2px);box-shadow:0 16px 34px -10px rgba(176,58,46,.85);}
+  .btn-download:active{transform:translateY(0);}
+  .btn-download .dl-icon{font-size:20px;line-height:1;}
+  .btn-download:disabled{opacity:.6;cursor:wait;transform:none;}
+  .hint{font-size:12px;color:var(--ink-soft);margin-top:6px;letter-spacing:.03em;}
+
+  /* worksheet */
+  #stage{margin-top:30px;}
+  .sheet{background:#fff;width:210mm;height:297mm;overflow:hidden;margin:0 auto 26px;padding:16mm 16mm 14mm;position:relative;box-shadow:0 24px 60px -30px rgba(20,40,20,.55);color:#15130f;display:flex;flex-direction:column;break-after:page;}
+  .sheet:last-child{break-after:auto;}
+  .ws-body{flex:1;min-height:0;display:flex;flex-direction:column;}
+  .ws-head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid var(--rule);padding-bottom:10px;margin-bottom:6px;}
+  .ws-head .title{font-family:'Noto Serif TC',serif;font-weight:700;font-size:23px;letter-spacing:.08em;}
+  .ws-head .meta{text-align:right;font-size:12px;color:#3a352d;line-height:1.9;}
+  .name-field{border-bottom:1px solid #999;display:inline-block;min-width:120px;}
+  .ws-subbar{display:flex;justify-content:space-between;font-size:12.5px;color:#3a352d;padding:7px 2px 0;letter-spacing:.04em;}
+  .instruction{margin:14px 0 12px;font-size:13.5px;line-height:1.7;background:#f1f6f2;border-left:3px solid var(--accent);padding:10px 14px;border-radius:0 6px 6px 0;}
+
+  /* problem rows */
+  .qrow{display:flex;align-items:center;gap:14px;border:1px solid #cfc7b6;border-radius:9px;padding:var(--row-pad,14px) 16px;margin-bottom:var(--row-gap,11px);page-break-inside:avoid;}
+  .qnum{font-weight:600;color:var(--accent-deep);min-width:30px;font-size:15px;}
+  .expr{font-family:'Noto Serif TC',serif;letter-spacing:.04em;display:inline-flex;align-items:center;gap:4px;font-size:calc(1em * var(--expr-scale,1));}
+  .expr-card{border:1.3px solid #c4bba8;border-radius:8px;padding:8px 16px;background:#fffdf7;min-width:96px;text-align:center;}
+  .expr-card.circled{border:2.5px solid var(--answer);box-shadow:0 0 0 3px rgba(176,58,46,.14);}
+  .vs{font-family:'Noto Serif TC',serif;color:#8a8276;font-size:18px;}
+  .sym-blank{border:1.4px dashed #b8ac95;border-radius:6px;width:46px;height:42px;display:inline-flex;align-items:center;justify-content:center;color:#cfc7b6;font-size:13px;}
+  .sym-blank .ans{color:var(--answer);font-family:'Noto Serif TC',serif;font-weight:700;}
+  .circle-hint{margin-left:auto;font-size:11.5px;color:#8a8276;}
+
+  .ws-foot{position:absolute;bottom:10mm;left:16mm;right:16mm;display:flex;justify-content:space-between;align-items:center;border-top:1px solid #cfc7b6;padding-top:7px;font-size:10.5px;color:#6a6358;letter-spacing:.05em;}
+  .ws-foot .designer{font-weight:500;color:#34433c;}
+
+  /* answer page */
+  .answer-tag{display:inline-block;background:var(--answer);color:#fff;font-size:11px;padding:3px 12px;border-radius:14px;letter-spacing:.18em;margin-bottom:4px;}
+  .ans-item{break-inside:avoid;border-bottom:1px dotted #d8d0c0;padding:2px 0;}
+  .ans-item .ai-num{color:var(--accent-deep);font-weight:600;margin-right:6px;}
+  .ans-item .ai-val{color:var(--answer);font-family:'Noto Serif TC',serif;font-weight:500;}
+
+  @media print{
+    body{background:#fff;padding:0;}
+    .panel,header.app,.no-print{display:none !important;}
+    #stage{margin:0;}
+    .sheet{box-shadow:none;margin:0;width:210mm;height:297mm;page-break-after:always;}
+    .sheet:last-child{page-break-after:auto;}
+    @page{size:A4;margin:0;}
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="app">
+    <div class="eyebrow">Occupational Therapy · Numeracy</div>
+    <h1>算式比大小工作單生成器</h1>
+    <div class="sub">兩兩算式比較 · 圈選較大者／填入＞＜＝ · 適用兒童數感與長者認知維持</div>
+  </header>
+
+  <div class="panel no-print">
+    <h2>運算類型</h2>
+    <div class="chips" id="opChips">
+      <span class="chip on" data-op="+">加法 ＋</span>
+      <span class="chip on" data-op="-">減法 －</span>
+      <span class="chip on" data-op="*">乘法 ×</span>
+      <span class="chip on" data-op="/">除法 ÷</span>
+    </div>
+    <div class="hint">至少選一種；工作單會在所選運算中混合出題。</div>
+  </div>
+
+  <div class="panel no-print">
+    <h2>作答方式與難度</h2>
+    <div class="grid">
+      <div class="field">
+        <label>作答方式</label>
+        <select id="mode">
+          <option value="symbol" selected>填入 ＞ ＜ ＝ 符號</option>
+          <option value="circle">圈選較大的算式</option>
+          <option value="both">混合（圈選＋填符號）</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>難度等級</label>
+        <select id="level">
+          <option value="1">第一級 · 入門（個位數）</option>
+          <option value="2" selected>第二級 · 標準（兩位數內）</option>
+          <option value="3">第三級 · 進階（較大數、含進退位）</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>每張題數</label>
+        <select id="perPage">
+          <option value="8">8 題</option>
+          <option value="10" selected>10 題</option>
+          <option value="12">12 題</option>
+          <option value="14">14 題</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>生成張數</label>
+        <select id="numSheets">
+          <option value="1" selected>1 張</option>
+          <option value="2">2 張</option>
+          <option value="3">3 張</option>
+          <option value="4">4 張</option>
+          <option value="5">5 張</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>字體大小</label>
+        <select id="fsize">
+          <option value="20">標準</option>
+          <option value="26" selected>放大（長者友善）</option>
+          <option value="32">特大</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>允許出現相等（＝）</label>
+        <select id="allowEq">
+          <option value="1" selected>是（含＝題）</option>
+          <option value="0">否（一定有大小差）</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel no-print">
+    <h2>輸出設定</h2>
+    <div class="seedrow">
+      <div class="field" style="max-width:220px;">
+        <label>亂數種子（可重現）</label>
+        <input type="number" id="seed" value="2025" min="1">
+      </div>
+      <button class="btn btn-ghost" id="randSeed" style="height:42px;">隨機種子</button>
+    </div>
+    <div class="toggles" style="margin-top:18px;">
+      <label class="switch"><input type="checkbox" id="showInstr" checked>顯示作答說明</label>
+      <label class="switch"><input type="checkbox" id="showAns" checked>附解答頁</label>
+    </div>
+    <div class="actions">
+      <button class="btn btn-ghost" id="genBtn">重新生成</button>
+      <button class="btn btn-download" id="pdfBtn">
+        <span class="dl-icon">⬇</span> 下載 PDF
+      </button>
+    </div>
+    <div class="hint">點「下載 PDF」即可直接存成 A4 檔案，無需經過列印對話框。</div>
+  </div>
+
+  <div id="stage"></div>
+</div>
+
+<script>
+/* ===== 可重現亂數 ===== */
+function makeRng(seed){
+  let a=seed>>>0;
+  return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
+}
+let RNG=makeRng(2025);
+const rnd=()=>RNG();
+const ri=(lo,hi)=>lo+Math.floor(rnd()*(hi-lo+1));
+const pick=arr=>arr[Math.floor(rnd()*arr.length)];
+
+/* ===== 依難度與運算產生一個算式 ===== */
+function makeExpr(op,level){
+  let a,b,val,text;
+  if(op==='+'){
+    if(level===1){a=ri(1,9);b=ri(1,9);}
+    else if(level===2){a=ri(5,40);b=ri(5,40);}
+    else{a=ri(20,80);b=ri(20,80);}
+    val=a+b; text=`${a} ＋ ${b}`;
+  } else if(op==='-'){
+    if(level===1){a=ri(2,9);b=ri(1,a);}
+    else if(level===2){a=ri(10,50);b=ri(1,a);}
+    else{a=ri(40,99);b=ri(1,a);}
+    val=a-b; text=`${a} － ${b}`;
+  } else if(op==='*'){
+    if(level===1){a=ri(1,5);b=ri(1,5);}
+    else if(level===2){a=ri(2,9);b=ri(2,9);}
+    else{a=ri(3,12);b=ri(2,9);}
+    val=a*b; text=`${a} × ${b}`;
+  } else { // 除法，確保整除
+    if(level===1){b=ri(1,5);val=ri(1,5);}
+    else if(level===2){b=ri(2,9);val=ri(2,9);}
+    else{b=ri(2,12);val=ri(2,9);}
+    a=b*val; text=`${a} ÷ ${b}`;
+  }
+  return {text,val};
+}
+
+/* ===== 產生一題（兩個算式）=====
+   依 allowEq 決定是否允許相等；若不允許則重抽直到不等 */
+function makeQuestion(ops,level,allowEq){
+  let left,right,guard=0;
+  do{
+    left=makeExpr(pick(ops),level);
+    right=makeExpr(pick(ops),level);
+    guard++;
+  }while(!allowEq && left.val===right.val && guard<30);
+  let sym = left.val>right.val?'＞':(left.val<right.val?'＜':'＝');
+  let bigger = left.val>right.val?'left':(left.val<right.val?'right':'equal');
+  return {left,right,sym,bigger};
+}
+
+const OP_LABEL={'+':'加','-':'減','*':'乘','/':'除'};
+
+/* ===== 組裝 ===== */
+let answerKey=[];
+function exprCard(e,circled){
+  return `<span class="expr-card${circled?' circled':''}">${e.text}</span>`;
+}
+function renderRow(q,n,mode,modeForThis){
+  // modeForThis: 'circle' | 'symbol'
+  answerKey.push({n, sym:q.sym, bigger:q.bigger,
+    leftVal:q.left.val, rightVal:q.right.val});
+  if(modeForThis==='symbol'){
+    return `<div class="qrow">
+      <span class="qnum">${n}.</span>
+      <span class="expr">${exprCard(q.left,false)}</span>
+      <span class="sym-blank"></span>
+      <span class="expr">${exprCard(q.right,false)}</span>
+      <span class="circle-hint">填入 ＞ ＜ ＝</span>
+    </div>`;
+  }
+  // circle
+  return `<div class="qrow">
+    <span class="qnum">${n}.</span>
+    <span class="expr">${exprCard(q.left,false)}</span>
+    <span class="vs">和</span>
+    <span class="expr">${exprCard(q.right,false)}</span>
+    <span class="circle-hint">圈出較大的</span>
+  </div>`;
+}
+
+function modeOf(globalMode,index){
+  if(globalMode==='circle')return 'circle';
+  if(globalMode==='symbol')return 'symbol';
+  // both：交替
+  return index%2===0?'circle':'symbol';
+}
+
+function buildSheet(cfg,sheetIdx){
+  let rows='';
+  for(let i=0;i<cfg.perPage;i++){
+    const q=makeQuestion(cfg.ops,cfg.level,cfg.allowEq);
+    const m=modeOf(cfg.mode,i);
+    rows+=renderRow(q,i+1,cfg.mode,m);
+  }
+  const levelName={1:'第一級 入門',2:'第二級 標準',3:'第三級 進階'}[cfg.level];
+  const opNames=cfg.ops.map(o=>OP_LABEL[o]).join('、');
+  const modeName={both:'圈選＋填符號',circle:'圈選較大',symbol:'填入符號'}[cfg.mode];
+
+  const instr = cfg.showInstr ? `<div class="instruction">
+    <strong>作答說明：</strong>每題有兩個算式。先把兩邊各自算出來，再比較大小。
+    「圈選題」請把<b>較大</b>的那一個算式圈起來；「符號題」請在中間填入 ＞（大於）、＜（小於）或 ＝（等於）。
+  </div>` : '';
+
+  // ---- 自適應排版：確保一定不超出 A4 ----
+  // A4 內容區高度約 1010px @96dpi。
+  const A4_CONTENT = 1010;
+  let fixed = 64 + 26 + 40 + 12; // head + subbar + foot + 緩衝
+  if(cfg.showInstr) fixed += 58;
+  const avail = Math.max(120, A4_CONTENT - fixed);
+
+  let rowPad = 8, rowGap = 9;
+  // 每列在字體 f 下的固有高度：行高(f*1.35) + 卡片內距16 + 邊框約3
+  const rowBase = f => Math.round(f*1.35) + 19;
+  let eff = cfg.fsize; // 有效字體
+  let need = cfg.perPage * (rowBase(eff) + rowPad*2 + rowGap);
+  // 若超出，先縮間距
+  if(need > avail){
+    rowPad = 3; rowGap = 3;
+    need = cfg.perPage * (rowBase(eff) + rowPad*2 + rowGap);
+  }
+  // 仍超出 → 等比縮小有效字體，直到塞得下（保底 13px）
+  while(need > avail && eff > 13){
+    eff -= 1;
+    need = cfg.perPage * (rowBase(eff) + rowPad*2 + rowGap);
+  }
+  // 若空間還寬鬆，把多餘空間平均回填到間距讓版面飽滿（保證不超出）
+  if(eff === cfg.fsize){
+    let slack = avail - need;
+    if(slack > 0){
+      const addPerRow = slack / cfg.perPage;
+      let addPad = Math.floor(addPerRow * 0.5 / 2);
+      let addGap = Math.floor(addPerRow * 0.5);
+      rowPad = Math.min(20, rowPad + addPad);
+      rowGap = Math.min(18, rowGap + addGap);
+      let check = cfg.perPage * (rowBase(eff) + rowPad*2 + rowGap);
+      while(check > avail && (rowGap > 3 || rowPad > 3)){
+        if(rowGap > 3) rowGap--;
+        else if(rowPad > 3) rowPad--;
+        check = cfg.perPage * (rowBase(eff) + rowPad*2 + rowGap);
+      }
+    }
+  }
+  const exprScale = (eff/cfg.fsize).toFixed(3); // 算式區縮放比例
+
+  return `<div class="sheet" style="font-size:${cfg.fsize}px;--row-pad:${rowPad}px;--row-gap:${rowGap}px;--expr-scale:${exprScale};">
+    <div class="ws-head">
+      <div class="title">算式比大小工作單</div>
+      <div class="meta">
+        姓名：<span class="name-field">&nbsp;</span><br>
+        日期：______ 年 ____ 月 ____ 日
+      </div>
+    </div>
+    <div class="ws-subbar">
+      <span>難度：${levelName}　|　運算：${opNames}　|　方式：${modeName}</span>
+      <span>第 ${sheetIdx+1} 張　|　種子：${cfg.seed}</span>
+    </div>
+    <div class="ws-body">
+      ${instr}
+      ${rows}
+    </div>
+    <div class="ws-foot">
+      <span class="designer">設計者：愛迪樂 鍾孟修 職能治療師</span>
+      <span>數字認知・大小比較訓練</span>
+    </div>
+  </div>`;
+}
+
+function buildAnswerSheet(allKeys,cfg){
+  // 計算總答案數，決定欄數與字體
+  const totalItems = allKeys.reduce((s,sk)=>s+sk.items.length,0);
+  const numBlocks = allKeys.length;
+
+  // 欄數：答案少用少欄(字更大)，多則增欄
+  let cols;
+  if(totalItems <= 12) cols = 2;
+  else if(totalItems <= 30) cols = 2;
+  else cols = 3;
+
+  // 每欄大致筆數（含各張標題佔位）
+  const linesPerCol = Math.ceil((totalItems + numBlocks*1.4) / cols);
+  // 可用高度約 900px（扣頁首/標籤/說明/頁尾）
+  const availH = 900;
+  // 由可用高度與每欄行數反推字體與行距，讓答案填滿頁面
+  // 行高倍數：答案少時加大，答案多時收斂
+  const lineMult = linesPerCol <= 8 ? 2.6 : (linesPerCol <= 16 ? 2.1 : 1.85);
+  let ansFs = Math.floor(availH / (linesPerCol * lineMult));
+  ansFs = Math.max(14, Math.min(40, ansFs)); // 14–40px 之間
+  const lineH = (ansFs * (linesPerCol <= 8 ? 2.4 : linesPerCol <= 16 ? 2.0 : 1.8)).toFixed(0);
+  const numFs = Math.round(ansFs*0.78);
+  const tagFs = Math.round(ansFs*0.62);
+
+  let blocks='';
+  allKeys.forEach(sk=>{
+    const items=sk.items.map(a=>{
+      const big = a.bigger==='equal'?'相等':(a.bigger==='left'?'左大':'右大');
+      return `<div class="ans-item" style="font-size:${ansFs}px;line-height:${lineH}px;">
+        <span class="ai-num" style="font-size:${numFs}px;">${a.n}.</span><span class="ai-val">${a.leftVal} ${a.sym} ${a.rightVal}</span><span style="color:#8a8276;font-size:${tagFs}px;margin-left:6px;">（${big}）</span>
+      </div>`;
+    }).join('');
+    const title = numBlocks>1
+      ? `<div style="font-family:'Noto Serif TC',serif;font-weight:600;font-size:${Math.round(ansFs*0.95)}px;color:var(--accent-deep);margin:8px 0 4px;letter-spacing:.08em;break-inside:avoid;">第 ${sk.sheet+1} 張</div>`
+      : '';
+    blocks+=`<div style="break-inside:avoid-column;margin-bottom:6px;">${title}${items}</div>`;
+  });
+
+  return `<div class="sheet">
+    <div class="ws-head">
+      <div class="title">解答頁</div>
+      <div class="meta">種子：${cfg.seed}<br>共 ${cfg.numSheets} 張</div>
+    </div>
+    <div class="ws-body" style="overflow:hidden;">
+      <span class="answer-tag" style="margin-top:6px;">ANSWER KEY</span>
+      <div class="instruction" style="border-color:var(--answer);background:#fdf2f0;">
+        每題標示兩邊算出的數值與正確符號。「左大／右大」指圈選題應圈選的那一側。
+      </div>
+      <div style="columns:${cols};column-gap:32px;margin-top:8px;flex:1;">${blocks}</div>
+    </div>
+    <div class="ws-foot">
+      <span class="designer">設計者：愛迪樂 鍾孟修 職能治療師</span>
+      <span>解答頁</span>
+    </div>
+  </div>`;
+}
+
+function buildAll(cfg){
+  RNG=makeRng(cfg.seed);
+  let html='';
+  const allKeys=[];
+  for(let s=0;s<cfg.numSheets;s++){
+    answerKey=[];
+    html+=buildSheet(cfg,s);
+    allKeys.push({sheet:s, items:answerKey.slice()});
+  }
+  if(cfg.showAns) html+=buildAnswerSheet(allKeys,cfg);
+  return html;
+}
+
+/* ===== UI ===== */
+const $=id=>document.getElementById(id);
+$('opChips').addEventListener('click',e=>{
+  if(!e.target.classList.contains('chip'))return;
+  const on=document.querySelectorAll('#opChips .chip.on');
+  if(e.target.classList.contains('on') && on.length===1)return;
+  e.target.classList.toggle('on');
+});
+$('randSeed').addEventListener('click',()=>{ $('seed').value=Math.floor(Math.random()*9999)+1; });
+
+function gather(){
+  const ops=[...document.querySelectorAll('#opChips .chip.on')].map(c=>c.dataset.op);
+  return {
+    ops: ops.length?ops:['+'],
+    mode:$('mode').value,
+    level:parseInt($('level').value),
+    perPage:parseInt($('perPage').value),
+    numSheets:parseInt($('numSheets').value),
+    fsize:parseInt($('fsize').value),
+    allowEq:$('allowEq').value==='1',
+    seed:parseInt($('seed').value)||1,
+    showInstr:$('showInstr').checked,
+    showAns:$('showAns').checked
+  };
+}
+function render(){ $('stage').innerHTML=buildAll(gather()); }
+$('genBtn').addEventListener('click',render);
+
+// ---- 直接下載 PDF ----
+$('pdfBtn').addEventListener('click',async()=>{
+  const btn=$('pdfBtn');
+  const old=btn.innerHTML;
+  btn.disabled=true; btn.innerHTML='<span class="dl-icon">⏳</span> 產生中…';
+  render(); // 確保最新內容
+  await new Promise(r=>setTimeout(r,150)); // 等字體與版面就緒
+  const stage=$('stage');
+  const opt={
+    margin:0,
+    filename:`算式比大小工作單_種子${$('seed').value}.pdf`,
+    image:{type:'jpeg',quality:0.98},
+    html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff'},
+    jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
+    pagebreak:{mode:['css','legacy']}
+  };
+  try{
+    await html2pdf().set(opt).from(stage).save();
+  }catch(e){
+    alert('PDF 產生失敗，請再試一次。');
+    console.error(e);
+  }finally{
+    btn.disabled=false; btn.innerHTML=old;
+  }
+});
+
+render();
+</script>
+</body>
+</html>
