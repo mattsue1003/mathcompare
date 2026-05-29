@@ -97,6 +97,40 @@
   .ans-item .ai-num{color:var(--accent-deep);font-weight:600;margin-right:6px;flex-shrink:0;}
   .ans-item .ai-val{color:var(--answer);font-family:'Noto Serif TC',serif;font-weight:500;white-space:nowrap;}
 
+  /* ---- 手機響應式 ---- */
+  @media (max-width: 768px){
+    body{padding:18px 12px 60px;}
+    header.app h1{font-size:24px;}
+    header.app .sub{font-size:12px;}
+    .panel{padding:18px 16px;border-radius:12px;margin-bottom:16px;}
+    .panel h2{font-size:15px;margin-bottom:14px;}
+    .grid{grid-template-columns:1fr;gap:14px;}
+    .toggles{gap:14px;}
+    .seedrow{flex-wrap:wrap;}
+    .seedrow .field{max-width:none !important;flex:1 1 140px;}
+    .actions{gap:10px;}
+    button.btn{padding:12px 22px;font-size:14px;}
+    .btn-download{font-size:16px;padding:15px 28px;width:100%;justify-content:center;}
+    /* 預覽區：把 794px 的 sheet 縮小塞進手機螢幕(PDF 擷取前會強制回 794px) */
+    /* 用 zoom 而非 transform：zoom 會縮放佈局尺寸，不會在下方留大片空白 */
+    #stage{
+      zoom: calc((100vw - 28px) / 794);
+    }
+  }
+  /* 不支援 zoom 的瀏覽器(Firefox)後備：用 transform */
+  @supports not (zoom: 1){
+    @media (max-width: 768px){
+      #stage{
+        transform-origin:top left;
+        transform:scale(calc((100vw - 28px) / 794));
+        height:auto;
+      }
+    }
+  @media (max-width: 420px){
+    header.app h1{font-size:20px;letter-spacing:.03em;}
+    .panel h2{letter-spacing:.06em;}
+  }
+
   @media print{
     body{background:#fff;padding:0;}
     .panel,header.app,.no-print{display:none !important;}
@@ -568,6 +602,16 @@ $('pdfBtn').addEventListener('click',async()=>{
   const btn=$('pdfBtn');
   const old=btn.innerHTML;
   btn.disabled=true; btn.innerHTML='<span class="dl-icon">⏳</span> 產生中…';
+
+  // 手機上 #stage 可能被 CSS 縮放(transform)，會干擾量測與擷取。
+  // 暫時清除縮放，讓 render/fit/擷取都在原始 794px 尺寸下進行。
+  const stageEl = $('stage');
+  const prevStageStyle = stageEl.getAttribute('style') || '';
+  stageEl.style.transform = 'none';
+  stageEl.style.width = '794px';
+  stageEl.style.margin = '0 auto';
+  stageEl.style.translate = '0';
+
   render();
   await new Promise(r=>setTimeout(r,250));
   fitAllSheets();
@@ -617,6 +661,8 @@ $('pdfBtn').addEventListener('click',async()=>{
     console.error('PDF 產生失敗:', e);
     alert('PDF 產生失敗。可能是函式庫載入中或網路問題，請稍候幾秒再按一次；若持續失敗，可用瀏覽器列印（Ctrl/Cmd+P）另存為 PDF。');
   }finally{
+    // 恢復 #stage 原本樣式(手機縮放預覽)
+    stageEl.setAttribute('style', prevStageStyle);
     btn.disabled=false; btn.innerHTML=old;
   }
 });
