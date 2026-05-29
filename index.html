@@ -91,7 +91,7 @@
 
   /* answer page */
   .answer-tag{display:inline-block;background:var(--answer);color:#fff;font-size:11px;padding:3px 12px;border-radius:14px;letter-spacing:.18em;margin-bottom:4px;}
-  .ans-item{break-inside:avoid;border-bottom:1px dotted #d8d0c0;padding:2px 0;white-space:nowrap;overflow:hidden;display:flex;align-items:baseline;}
+  .ans-item{break-inside:avoid;border-bottom:1px dotted #d8d0c0;padding:2px 0;white-space:nowrap;display:flex;align-items:baseline;}
   .ans-item .ai-num{color:var(--accent-deep);font-weight:600;margin-right:6px;flex-shrink:0;}
   .ans-item .ai-val{color:var(--answer);font-family:'Noto Serif TC',serif;font-weight:500;white-space:nowrap;}
 
@@ -401,14 +401,22 @@ function buildAnswerSheet(allKeys,cfg){
     lineH = Math.floor(availH / worstLines);
     if(ansFs * 1.5 > lineH) ansFs = Math.max(13, Math.floor(lineH / 1.5));
   }
-  // 依欄寬限制字體：確保最長的答案能單行容納，不換行也不被裁切
-  const contentW = 794 - 60*2;                       // 內容區寬
+  // 依欄寬限制字體：確保最長的答案(含「（圈左邊）」標籤)能單行完整顯示
+  const contentW = 794 - 60*2;                       // 內容區寬 = 674
   const colW = (contentW - 32*(cols-1)) / cols;       // 每欄寬
-  // 估算一行所需寬度：圈選題最長(兩個兩位數+紅框padding+頓號+標籤)約 13 字身單位
-  const charUnits = 13;
-  const maxFsByWidth = Math.floor(colW / (charUnits * 0.6));
+  // 一行寬度組成(以 ansFs 為單位估算)：
+  //   序號 "16." ≈ 2.4 字身 × 0.78(numFs比例)
+  //   數值 "50 、 48" 含紅框padding ≈ 6 字身(數字約0.6寬,全形頓號1.0)
+  //   標籤 "（圈左邊）" 5全形字 × 0.62(tagFs比例) × 1.0 ≈ 3.1 字身
+  //   間距緩衝 ≈ 1.5 字身
+  // 合計約 ansFs × (2.4*0.78 + 6*0.6 + 3.1 + 1.5) ≈ ansFs × 10.1
+  const needUnitsPerFs = 10.5; // 保守
+  const maxFsByWidth = Math.floor(colW / needUnitsPerFs);
   if(ansFs > maxFsByWidth) ansFs = Math.max(12, maxFsByWidth);
-  lineH = Math.min(lineH, Math.floor(availH / linesPerCol));
+  // 行距撐大：用可用高度平均分配給每欄行數，讓答案填滿頁面不上擠下空
+  const lineHCap = linesPerCol <= 8 ? ansFs * 3.6 : ansFs * 2.8; // 行少時允許更鬆
+  lineH = Math.floor(Math.min(availH / linesPerCol, lineHCap));
+  lineH = Math.max(lineH, Math.floor(ansFs * 1.6)); // 下限避免太擠
   const numFs = Math.round(ansFs*0.78);
   const tagFs = Math.round(ansFs*0.62);
 
@@ -601,12 +609,10 @@ $('pdfBtn').addEventListener('click',async()=>{
       el.style.boxShadow = prevShadow;
       el.style.margin = prevMargin;
 
-      // 依 canvas 實際比例鋪滿 A4 寬，高度等比；因 sheet 是 A4 比例，高度≈A4H
+      // sheet 已是固定 A4 比例(794×1122≈210×297)，直接鋪滿整頁，不做等比計算
       const imgData = canvas.toDataURL('image/jpeg', 0.96);
-      const imgH = canvas.height * A4W / canvas.width; // 等比高度
       if(i>0) pdf.addPage();
-      // 置頂鋪滿，高度用等比值（A4 比例下約等於 297，誤差<1mm 不溢頁）
-      pdf.addImage(imgData, 'JPEG', 0, 0, A4W, Math.min(imgH, A4H), undefined, 'FAST');
+      pdf.addImage(imgData, 'JPEG', 0, 0, A4W, A4H, undefined, 'FAST');
     }
     pdf.save(`算式比大小認知紙本教案_種子${$('seed').value}.pdf`);
 
