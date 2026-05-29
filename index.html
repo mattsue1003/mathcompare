@@ -574,60 +574,62 @@ $('pdfBtn').addEventListener('click',async()=>{
 
   // 取得 html2pdf bundle 內含的 html2canvas 與 jsPDF
   const h2c = window.html2canvas;
-  const JsPDFCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+  const JsPDFCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF ||
+                    (window.html2pdf && window.html2pdf.jsPDF);
+
+  // 共用：逐張擷取一個 sheet 元素成 canvas（固定 A4 像素尺寸）
+  async function captureSheet(el){
+    const prevShadow = el.style.boxShadow;
+    const prevMargin = el.style.margin;
+    el.style.boxShadow = 'none';
+    el.style.margin = '0';
+    const SW = 794, SH = 1122;
+    const canvas = await h2c(el, {
+      scale: 2, useCORS: true, backgroundColor: '#ffffff',
+      width: SW, height: SH, windowWidth: SW, windowHeight: SH,
+      scrollX: 0, scrollY: 0
+    });
+    el.style.boxShadow = prevShadow;
+    el.style.margin = prevMargin;
+    return canvas;
+  }
 
   try{
-    if(!h2c || !JsPDFCtor) throw new Error('lib-missing');
+    if(!h2c || !JsPDFCtor){
+      console.warn('html2canvas:', !!h2c, ' jsPDF:', !!JsPDFCtor);
+      throw new Error('lib-missing');
+    }
 
-    const pdf = new JsPDFCtor({unit:'mm', format:'a4', orientation:'portrait'});
     const A4W = 210, A4H = 297;
+    const pdf = new JsPDFCtor({unit:'mm', format:'a4', orientation:'portrait', compress:true});
     const sheets = document.querySelectorAll('#stage .sheet');
 
     for(let i=0;i<sheets.length;i++){
-      const el = sheets[i];
-      // 暫存並清除會干擾擷取的樣式
-      const prevShadow = el.style.boxShadow;
-      const prevMargin = el.style.margin;
-      el.style.boxShadow = 'none';
-      el.style.margin = '0';
-
-      // 強制鎖定擷取尺寸為固定 A4 像素(794×1122)，不用 offsetHeight
-      // (offsetHeight 在內容溢出時可能回報>1122，導致圖片過高、產生空白頁)
-      const SW = 794, SH = 1122;
-      const canvas = await h2c(el, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        width: SW,
-        height: SH,
-        windowWidth: SW,
-        windowHeight: SH,
-        scrollX: 0,
-        scrollY: 0
-      });
-
-      el.style.boxShadow = prevShadow;
-      el.style.margin = prevMargin;
-
-      // 直接鋪滿固定 A4 尺寸
-      const imgData = canvas.toDataURL('image/jpeg', 0.96);
+      const canvas = await captureSheet(sheets[i]);
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
       if(i>0) pdf.addPage();
-      pdf.addImage(imgData, 'JPEG', 0, 0, A4W, A4H, undefined, 'FAST');
+      // 寬度填滿，高度略小於頁面避免浮點誤差換頁；置中對齊
+      pdf.addImage(imgData, 'JPEG', 0, 0, A4W, A4H - 0.4, undefined, 'FAST');
     }
     pdf.save(`算式比大小認知紙本教案_種子${$('seed').value}.pdf`);
 
   }catch(e){
     console.error('主方案失敗，改用後備:', e);
-    // 後備：html2pdf 標準流程，每張 .sheet 前分頁
+    // 後備：若有 jsPDF 仍逐張擷取(不靠 html2pdf 的 CSS 分頁,避免空白頁)
     try{
-      await html2pdf().set({
-        margin:0,
-        filename:`算式比大小認知紙本教案_種子${$('seed').value}.pdf`,
-        image:{type:'jpeg',quality:0.96},
-        html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff'},
-        jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
-        pagebreak:{mode:'css'}
-      }).from($('stage')).save();
+      if(h2c && JsPDFCtor){
+        const A4W = 210, A4H = 297;
+        const pdf = new JsPDFCtor({unit:'mm', format:'a4', orientation:'portrait'});
+        const sheets = document.querySelectorAll('#stage .sheet');
+        for(let i=0;i<sheets.length;i++){
+          const canvas = await captureSheet(sheets[i]);
+          if(i>0) pdf.addPage();
+          pdf.addImage(canvas.toDataURL('image/jpeg',0.95), 'JPEG', 0, 0, A4W, A4H-0.4, undefined, 'FAST');
+        }
+        pdf.save(`算式比大小認知紙本教案_種子${$('seed').value}.pdf`);
+      }else{
+        throw new Error('no-lib');
+      }
     }catch(e2){
       alert('PDF 產生失敗，請改用瀏覽器列印（Ctrl/Cmd+P）另存 PDF。');
       console.error(e2);
