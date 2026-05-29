@@ -7,7 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   :root{
     --ink:#1a1814; --ink-soft:#4a4540;
@@ -572,10 +573,9 @@ $('pdfBtn').addEventListener('click',async()=>{
   fitAllSheets();
   await new Promise(r=>setTimeout(r,120));
 
-  // 取得 html2pdf bundle 內含的 html2canvas 與 jsPDF
+  // 獨立 CDN：html2canvas → window.html2canvas；jsPDF(UMD) → window.jspdf.jsPDF
   const h2c = window.html2canvas;
-  const JsPDFCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF ||
-                    (window.html2pdf && window.html2pdf.jsPDF);
+  const JsPDFCtor = window.jspdf && window.jspdf.jsPDF;
 
   // 共用：逐張擷取一個 sheet 元素成 canvas（固定 A4 像素尺寸）
   async function captureSheet(el){
@@ -608,32 +608,14 @@ $('pdfBtn').addEventListener('click',async()=>{
       const canvas = await captureSheet(sheets[i]);
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
       if(i>0) pdf.addPage();
-      // 寬度填滿，高度略小於頁面避免浮點誤差換頁；置中對齊
+      // 高度略小於頁面避免浮點誤差換頁
       pdf.addImage(imgData, 'JPEG', 0, 0, A4W, A4H - 0.4, undefined, 'FAST');
     }
     pdf.save(`算式比大小認知紙本教案_種子${$('seed').value}.pdf`);
 
   }catch(e){
-    console.error('主方案失敗，改用後備:', e);
-    // 後備：若有 jsPDF 仍逐張擷取(不靠 html2pdf 的 CSS 分頁,避免空白頁)
-    try{
-      if(h2c && JsPDFCtor){
-        const A4W = 210, A4H = 297;
-        const pdf = new JsPDFCtor({unit:'mm', format:'a4', orientation:'portrait'});
-        const sheets = document.querySelectorAll('#stage .sheet');
-        for(let i=0;i<sheets.length;i++){
-          const canvas = await captureSheet(sheets[i]);
-          if(i>0) pdf.addPage();
-          pdf.addImage(canvas.toDataURL('image/jpeg',0.95), 'JPEG', 0, 0, A4W, A4H-0.4, undefined, 'FAST');
-        }
-        pdf.save(`算式比大小認知紙本教案_種子${$('seed').value}.pdf`);
-      }else{
-        throw new Error('no-lib');
-      }
-    }catch(e2){
-      alert('PDF 產生失敗，請改用瀏覽器列印（Ctrl/Cmd+P）另存 PDF。');
-      console.error(e2);
-    }
+    console.error('PDF 產生失敗:', e);
+    alert('PDF 產生失敗。可能是函式庫載入中或網路問題，請稍候幾秒再按一次；若持續失敗，可用瀏覽器列印（Ctrl/Cmd+P）另存為 PDF。');
   }finally{
     btn.disabled=false; btn.innerHTML=old;
   }
