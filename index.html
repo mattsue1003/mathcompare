@@ -64,9 +64,10 @@
 
   /* worksheet */
   #stage{margin-top:30px;}
-  .sheet{background:#fff;width:210mm;height:297mm;overflow:hidden;margin:0 auto 26px;padding:16mm 16mm 14mm;position:relative;box-shadow:0 24px 60px -30px rgba(20,40,20,.55);color:#15130f;display:flex;flex-direction:column;break-after:page;}
+  .sheet{background:#fff;width:210mm;height:296mm;overflow:hidden;margin:0 auto 26px;padding:15mm 16mm 13mm;position:relative;box-shadow:0 24px 60px -30px rgba(20,40,20,.55);color:#15130f;display:flex;flex-direction:column;break-after:page;}
   .sheet:last-child{break-after:auto;}
   .ws-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
+  .ws-questions{flex:1 1 auto;display:flex;flex-direction:column;justify-content:space-between;gap:var(--row-gap,9px);min-height:0;}
   .ws-head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid var(--rule);padding-bottom:10px;margin-bottom:6px;flex-shrink:0;}
   .ws-head .title{font-family:'Noto Serif TC',serif;font-weight:700;font-size:23px;letter-spacing:.08em;}
   .ws-head .meta{text-align:right;font-size:12px;color:#3a352d;line-height:1.9;}
@@ -75,7 +76,7 @@
   .instruction{margin:14px 0 12px;font-size:13.5px;line-height:1.7;background:#f1f6f2;border-left:3px solid var(--accent);padding:10px 14px;border-radius:0 6px 6px 0;}
 
   /* problem rows */
-  .qrow{display:flex;align-items:center;gap:14px;border:1px solid #cfc7b6;border-radius:9px;padding:var(--row-pad,14px) 16px;margin-bottom:var(--row-gap,11px);page-break-inside:avoid;}
+  .qrow{display:flex;align-items:center;gap:14px;border:1px solid #cfc7b6;border-radius:9px;padding:var(--row-pad,14px) 16px;flex-shrink:0;page-break-inside:avoid;}
   .qnum{font-weight:600;color:var(--accent-deep);min-width:30px;font-size:15px;}
   .expr{font-family:'Noto Serif TC',serif;letter-spacing:.04em;display:inline-flex;align-items:center;gap:4px;font-size:calc(1em * var(--expr-scale,1));}
   .expr-card{border:1.3px solid #c4bba8;border-radius:8px;padding:8px 16px;background:#fffdf7;min-width:96px;text-align:center;}
@@ -98,7 +99,7 @@
     body{background:#fff;padding:0;}
     .panel,header.app,.no-print{display:none !important;}
     #stage{margin:0;}
-    .sheet{box-shadow:none;margin:0;width:210mm;height:297mm;page-break-after:always;}
+    .sheet{box-shadow:none;margin:0;width:210mm;height:296mm;page-break-after:always;}
     .sheet:last-child{page-break-after:auto;}
     @page{size:A4;margin:0;}
   }
@@ -143,12 +144,14 @@
         </select>
       </div>
       <div class="field">
-        <label>每張題數</label>
+        <label>每張題數（字體自動調整）</label>
         <select id="perPage">
+          <option value="6">6 題（字最大）</option>
           <option value="8">8 題</option>
           <option value="10" selected>10 題</option>
           <option value="12">12 題</option>
           <option value="14">14 題</option>
+          <option value="16">16 題（字較小）</option>
         </select>
       </div>
       <div class="field">
@@ -159,14 +162,6 @@
           <option value="3">3 張</option>
           <option value="4">4 張</option>
           <option value="5">5 張</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>字體大小</label>
-        <select id="fsize">
-          <option value="20">標準</option>
-          <option value="26" selected>放大（長者友善）</option>
-          <option value="32">特大</option>
         </select>
       </div>
       <div class="field">
@@ -265,7 +260,7 @@ function exprCard(e,circled){
 }
 function renderRow(q,n,mode,modeForThis){
   // modeForThis: 'circle' | 'symbol'
-  answerKey.push({n, sym:q.sym, bigger:q.bigger,
+  answerKey.push({n, sym:q.sym, bigger:q.bigger, qmode:modeForThis,
     leftVal:q.left.val, rightVal:q.right.val});
   if(modeForThis==='symbol'){
     return `<div class="qrow">
@@ -367,7 +362,7 @@ function buildSheet(cfg,sheetIdx){
     </div>
     <div class="ws-body">
       ${instr}
-      ${rows}
+      <div class="ws-questions">${rows}</div>
     </div>
     <div class="ws-foot">
       <span class="designer">設計者：愛迪樂 鍾孟修 職能治療師</span>
@@ -412,9 +407,21 @@ function buildAnswerSheet(allKeys,cfg){
   let blocks='';
   allKeys.forEach(sk=>{
     const items=sk.items.map(a=>{
-      const big = a.bigger==='equal'?'相等':(a.bigger==='left'?'左大':'右大');
+      let valHtml, tag;
+      if(a.qmode==='circle'){
+        // 圈選題：把正解算式圈起來，標示「圈左／圈右／一樣大」
+        const eq = a.bigger==='equal';
+        const lc = a.bigger==='left', rc = a.bigger==='right';
+        const card = (v,on)=>`<span style="${on?'color:var(--answer);font-weight:700;border:2px solid var(--answer);border-radius:6px;padding:0 6px;':'color:#6a6358;'}">${v}</span>`;
+        valHtml = `${card(a.leftVal,lc)} <span style="color:#8a8276;">、</span> ${card(a.rightVal,rc)}`;
+        tag = eq ? '一樣大' : (lc?'圈左邊':'圈右邊');
+      } else {
+        // 符號題：顯示 ＞＜＝
+        valHtml = `${a.leftVal} ${a.sym} ${a.rightVal}`;
+        tag = a.bigger==='equal'?'相等':(a.bigger==='left'?'左大':'右大');
+      }
       return `<div class="ans-item" style="font-size:${ansFs}px;line-height:${lineH}px;">
-        <span class="ai-num" style="font-size:${numFs}px;">${a.n}.</span><span class="ai-val">${a.leftVal} ${a.sym} ${a.rightVal}</span><span style="color:#8a8276;font-size:${tagFs}px;margin-left:6px;">（${big}）</span>
+        <span class="ai-num" style="font-size:${numFs}px;">${a.n}.</span><span class="ai-val">${valHtml}</span><span style="color:#8a8276;font-size:${tagFs}px;margin-left:6px;">（${tag}）</span>
       </div>`;
     }).join('');
     const title = numBlocks>1
@@ -431,7 +438,7 @@ function buildAnswerSheet(allKeys,cfg){
     <div class="ws-body">
       <span class="answer-tag" style="margin-top:6px;">ANSWER KEY</span>
       <div class="instruction" style="border-color:var(--answer);background:#fdf2f0;">
-        每題標示兩邊算出的數值與正確符號。「左大／右大」指圈選題應圈選的那一側。
+        圈選題：紅框標示應圈起的（較大）算式。符號題：標示兩邊數值與正確的 ＞＜＝ 符號。
       </div>
       <div style="columns:${cols};column-gap:32px;margin-top:8px;">${blocks}</div>
     </div>
@@ -473,12 +480,21 @@ function gather(){
     level:parseInt($('level').value),
     perPage:parseInt($('perPage').value),
     numSheets:parseInt($('numSheets').value),
-    fsize:parseInt($('fsize').value),
+    fsize:fsizeForPerPage(parseInt($('perPage').value)),
     allowEq:$('allowEq').value==='1',
     seed:parseInt($('seed').value)||1,
     showInstr:$('showInstr').checked,
     showAns:$('showAns').checked
   };
+}
+// 依每張題數自動決定基準字體：題少字大、題多字小
+function fsizeForPerPage(pp){
+  if(pp <= 6) return 34;
+  if(pp <= 8) return 30;
+  if(pp <= 10) return 26;
+  if(pp <= 12) return 23;
+  if(pp <= 14) return 20;
+  return 18; // 16 題
 }
 function render(){
   $('stage').innerHTML=buildAll(gather());
@@ -491,15 +507,30 @@ function fitAllSheets(){
   sheets.forEach(sheet=>{
     const body=sheet.querySelector('.ws-body');
     if(!body) return;
-    // 取得當前算式縮放(工作單)或答案字體(解答頁)起點
+    const qbox=sheet.querySelector('.ws-questions');
+    // 偵測溢出函式：
+    // 工作單(有.ws-questions)→ 題目自然總高 vs 容器可用高；解答頁→ body scrollHeight
+    const overflow=()=>{
+      if(qbox){
+        const rows=qbox.querySelectorAll('.qrow');
+        if(!rows.length) return false;
+        let sum=0;
+        rows.forEach(r=>{ sum += r.offsetHeight; });
+        const gap=parseFloat(getComputedStyle(qbox).rowGap)||0;
+        sum += gap*(rows.length-1);
+        // qbox 可用高 = body 高 - instr 高
+        const instr=body.querySelector('.instruction');
+        const avail=body.clientHeight - (instr?instr.offsetHeight+ (parseFloat(getComputedStyle(instr).marginTop)||0)+(parseFloat(getComputedStyle(instr).marginBottom)||0):0);
+        return sum > avail - 2;
+      }
+      return body.scrollHeight > body.clientHeight + 1;
+    };
     let scale=parseFloat(sheet.style.getPropertyValue('--expr-scale'))||1;
     let guard=0;
-    // ws-body 設了 overflow:hidden，scrollHeight>clientHeight 即代表溢出
-    while(body.scrollHeight > body.clientHeight + 1 && guard < 60){
+    while(overflow() && guard < 60){
       scale -= 0.04;
       if(scale < 0.3) scale = 0.3;
       sheet.style.setProperty('--expr-scale', scale.toFixed(3));
-      // 同步縮小列間距
       const curGap=parseFloat(sheet.style.getPropertyValue('--row-gap'))||9;
       const curPad=parseFloat(sheet.style.getPropertyValue('--row-pad'))||8;
       if(curGap>2) sheet.style.setProperty('--row-gap',(curGap-1)+'px');
@@ -527,23 +558,46 @@ $('pdfBtn').addEventListener('click',async()=>{
   const old=btn.innerHTML;
   btn.disabled=true; btn.innerHTML='<span class="dl-icon">⏳</span> 產生中…';
   render(); // 確保最新內容
-  await new Promise(r=>setTimeout(r,200)); // 等字體與版面就緒
+  await new Promise(r=>setTimeout(r,250)); // 等字體與版面就緒
   fitAllSheets(); // 字體載入後再量測一次,確保不溢出
-  await new Promise(r=>setTimeout(r,50));
-  const stage=$('stage');
-  const opt={
-    margin:0,
-    filename:`算式比大小認知紙本教案_種子${$('seed').value}.pdf`,
-    image:{type:'jpeg',quality:0.98},
-    html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff'},
-    jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
-    pagebreak:{mode:['css','legacy']}
-  };
+  await new Promise(r=>setTimeout(r,80));
+
   try{
-    await html2pdf().set(opt).from(stage).save();
+    // 取得 html2pdf 內建的 html2canvas 與 jsPDF
+    const h2c = window.html2canvas;
+    const { jsPDF } = (window.jspdf || window.jsPDF) ? (window.jspdf || {jsPDF:window.jsPDF}) : {};
+    const JsPDFCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+    if(!h2c || !JsPDFCtor){
+      // 後備：仍用 html2pdf 但確保不分頁
+      throw new Error('fallback');
+    }
+    const pdf = new JsPDFCtor({unit:'mm',format:'a4',orientation:'portrait'});
+    const A4W = 210, A4H = 297;
+    const sheets = document.querySelectorAll('#stage .sheet');
+    for(let i=0;i<sheets.length;i++){
+      const canvas = await h2c(sheets[i], {scale:2, useCORS:true, backgroundColor:'#ffffff'});
+      const img = canvas.toDataURL('image/jpeg', 0.98);
+      if(i>0) pdf.addPage();
+      // 整張鋪滿 A4（sheet 本就是 A4 比例）
+      pdf.addImage(img, 'JPEG', 0, 0, A4W, A4H, undefined, 'FAST');
+    }
+    pdf.save(`算式比大小認知紙本教案_種子${$('seed').value}.pdf`);
   }catch(e){
-    alert('PDF 產生失敗，請再試一次。');
-    console.error(e);
+    // 後備方案：html2pdf 並停用 css 分頁（每張已是 A4，靠 avoid 防截斷）
+    try{
+      const stage=$('stage');
+      await html2pdf().set({
+        margin:0,
+        filename:`算式比大小認知紙本教案_種子${$('seed').value}.pdf`,
+        image:{type:'jpeg',quality:0.98},
+        html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff',windowWidth:794},
+        jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
+        pagebreak:{mode:['css','legacy'],before:'.sheet',avoid:'.qrow'}
+      }).from(stage).save();
+    }catch(e2){
+      alert('PDF 產生失敗，請再試一次。');
+      console.error(e,e2);
+    }
   }finally{
     btn.disabled=false; btn.innerHTML=old;
   }
