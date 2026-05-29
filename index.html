@@ -67,7 +67,7 @@
   .sheet{background:#fff;width:794px;height:1122px;overflow:hidden;margin:0 auto 26px;padding:54px 60px 46px;position:relative;box-shadow:0 24px 60px -30px rgba(20,40,20,.55);color:#15130f;display:flex;flex-direction:column;break-after:page;}
   .sheet:last-child{break-after:auto;}
   .ws-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
-  .ws-questions{flex:1 1 auto;display:flex;flex-direction:column;justify-content:space-between;gap:var(--row-gap,9px);min-height:0;}
+  .ws-questions{flex:1 1 auto;display:flex;flex-direction:column;justify-content:flex-start;min-height:0;}
   .ws-head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid var(--rule);padding-bottom:10px;margin-bottom:6px;flex-shrink:0;}
   .ws-head .title{font-family:'Noto Serif TC',serif;font-weight:700;font-size:23px;letter-spacing:.08em;}
   .ws-head .meta{text-align:right;font-size:12px;color:#3a352d;line-height:1.9;}
@@ -76,7 +76,8 @@
   .instruction{margin:14px 0 12px;font-size:13.5px;line-height:1.7;background:#f1f6f2;border-left:3px solid var(--accent);padding:10px 14px;border-radius:0 6px 6px 0;}
 
   /* problem rows */
-  .qrow{display:flex;align-items:center;gap:14px;border:1px solid #cfc7b6;border-radius:9px;padding:var(--row-pad,14px) 16px;flex-shrink:0;page-break-inside:avoid;}
+  .qrow{display:flex;align-items:center;gap:14px;border:1px solid #cfc7b6;border-radius:9px;padding:var(--row-pad,14px) 16px;margin-bottom:var(--row-gap,11px);flex-shrink:0;page-break-inside:avoid;}
+  .ws-questions .qrow:last-child{margin-bottom:0;}
   .qnum{font-weight:600;color:var(--accent-deep);min-width:30px;font-size:15px;}
   .expr{font-family:'Noto Serif TC',serif;letter-spacing:.04em;display:inline-flex;align-items:center;gap:4px;font-size:calc(1em * var(--expr-scale,1));}
   .expr-card{border:1.3px solid #c4bba8;border-radius:8px;padding:8px 16px;background:#fffdf7;min-width:96px;text-align:center;}
@@ -309,7 +310,7 @@ function buildSheet(cfg,sheetIdx){
   const A4_CONTENT = 1022;
   // footer 現為 flex 文檔流，必須計入；各區實測高度 + 加大安全緩衝
   // (runtime fitAllSheets 會再實測修正，此處保守估算減少縮放介入)
-  let fixed = 60 /*head*/ + 28 /*subbar*/ + 44 /*footer含border+padding+margin*/ + 50 /*安全緩衝*/;
+  let fixed = 60 /*head*/ + 28 /*subbar*/ + 44 /*footer含border+padding+margin*/ + 24 /*安全緩衝*/;
   if(cfg.showInstr) fixed += 70; // 說明框(含margin)
   const avail = Math.max(120, A4_CONTENT - fixed);
 
@@ -334,10 +335,11 @@ function buildSheet(cfg,sheetIdx){
     let slack = avail - need;
     if(slack > 0){
       const addPerRow = slack / cfg.perPage;
-      let addPad = Math.floor(addPerRow * 0.45 / 2);
-      let addGap = Math.floor(addPerRow * 0.45);
-      rowPad = Math.min(20, rowPad + addPad);
-      rowGap = Math.min(18, rowGap + addGap);
+      // 間距上限大幅放寬，讓題目能撐滿整頁(題少時間距較大但仍合理)
+      let addPad = Math.floor(addPerRow * 0.35 / 2);
+      let addGap = Math.floor(addPerRow * 0.65);
+      rowPad = Math.min(28, rowPad + addPad);
+      rowGap = Math.min(46, rowGap + addGap);
       let check = cfg.perPage * (rowBase(eff) + rowPad*2 + rowGap);
       while(check > avail && (rowGap > 3 || rowPad > 3)){
         if(rowGap > 3) rowGap--;
@@ -528,16 +530,8 @@ function fitAllSheets(){
     // 工作單(有.ws-questions)→ 題目自然總高 vs 容器可用高；解答頁→ body scrollHeight
     const overflow=()=>{
       if(qbox){
-        const rows=qbox.querySelectorAll('.qrow');
-        if(!rows.length) return false;
-        let sum=0;
-        rows.forEach(r=>{ sum += r.offsetHeight; });
-        const gap=parseFloat(getComputedStyle(qbox).rowGap)||0;
-        sum += gap*(rows.length-1);
-        // qbox 可用高 = body 高 - instr 高
-        const instr=body.querySelector('.instruction');
-        const avail=body.clientHeight - (instr?instr.offsetHeight+ (parseFloat(getComputedStyle(instr).marginTop)||0)+(parseFloat(getComputedStyle(instr).marginBottom)||0):0);
-        return sum > avail - 2;
+        // qbox 內容自然總高(含 qrow margin) vs qbox 可用高度
+        return qbox.scrollHeight > qbox.clientHeight + 2;
       }
       return body.scrollHeight > body.clientHeight + 1;
     };
@@ -597,19 +591,25 @@ $('pdfBtn').addEventListener('click',async()=>{
       el.style.boxShadow = 'none';
       el.style.margin = '0';
 
+      // 強制鎖定擷取尺寸為固定 A4 像素(794×1122)，不用 offsetHeight
+      // (offsetHeight 在內容溢出時可能回報>1122，導致圖片過高、產生空白頁)
+      const SW = 794, SH = 1122;
       const canvas = await h2c(el, {
         scale: 2,
         useCORS: true,
         backgroundColor: '#ffffff',
-        width: el.offsetWidth,
-        height: el.offsetHeight,
-        windowWidth: el.offsetWidth
+        width: SW,
+        height: SH,
+        windowWidth: SW,
+        windowHeight: SH,
+        scrollX: 0,
+        scrollY: 0
       });
 
       el.style.boxShadow = prevShadow;
       el.style.margin = prevMargin;
 
-      // sheet 已是固定 A4 比例(794×1122≈210×297)，直接鋪滿整頁，不做等比計算
+      // 直接鋪滿固定 A4 尺寸
       const imgData = canvas.toDataURL('image/jpeg', 0.96);
       if(i>0) pdf.addPage();
       pdf.addImage(imgData, 'JPEG', 0, 0, A4W, A4H, undefined, 'FAST');
