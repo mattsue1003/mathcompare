@@ -98,8 +98,9 @@
   .ans-item .ai-val{color:var(--answer);font-family:'Noto Serif TC',serif;font-weight:500;white-space:nowrap;}
 
   /* ---- 手機響應式 ---- */
+  #stage-wrap{ }
   @media (max-width: 768px){
-    body{padding:18px 12px 60px;}
+    body{padding:18px 12px 60px;overflow-x:hidden;}
     header.app h1{font-size:24px;}
     header.app .sub{font-size:12px;}
     .panel{padding:18px 16px;border-radius:12px;margin-bottom:16px;}
@@ -111,21 +112,18 @@
     .actions{gap:10px;}
     button.btn{padding:12px 22px;font-size:14px;}
     .btn-download{font-size:16px;padding:15px 28px;width:100%;justify-content:center;}
-    /* 預覽區：把 794px 的 sheet 縮小塞進手機螢幕(PDF 擷取前會強制回 794px) */
-    /* 用 zoom 而非 transform：zoom 會縮放佈局尺寸，不會在下方留大片空白 */
+    /* 預覽區縮放：wrapper 用 CSS 變數控制縮放後的高度避免留白，
+       #stage 用 transform scale 把 794px 等比縮進螢幕(PDF 擷取前會強制回 794px) */
+    #stage-wrap{
+      width:100%;
+      overflow:hidden;
+    }
     #stage{
-      zoom: calc((100vw - 28px) / 794);
+      transform-origin:top left;
+      transform:scale(var(--mobile-scale, 0.44));
+      width:794px;
     }
   }
-  /* 不支援 zoom 的瀏覽器(Firefox)後備：用 transform */
-  @supports not (zoom: 1){
-    @media (max-width: 768px){
-      #stage{
-        transform-origin:top left;
-        transform:scale(calc((100vw - 28px) / 794));
-        height:auto;
-      }
-    }
   @media (max-width: 420px){
     header.app h1{font-size:20px;letter-spacing:.03em;}
     .panel h2{letter-spacing:.06em;}
@@ -232,7 +230,7 @@
     <div class="hint">點「下載 PDF」即可直接存成 A4 檔案，無需經過列印對話框。</div>
   </div>
 
-  <div id="stage"></div>
+  <div id="stage-wrap"><div id="stage"></div></div>
 </div>
 
 <script>
@@ -552,7 +550,31 @@ function fsizeForPerPage(pp){
 function render(){
   $('stage').innerHTML=buildAll(gather());
   fitAllSheets();
+  applyMobileScale();
 }
+
+// 手機預覽縮放：計算縮放比例、設定 wrapper 高度消除 transform 留白
+function applyMobileScale(){
+  if(window.__pdfExporting) return; // PDF 匯出中,跳過手機縮放
+  const wrap=document.getElementById('stage-wrap');
+  const stage=document.getElementById('stage');
+  if(!wrap||!stage) return;
+  if(window.innerWidth > 768){
+    // 桌機：清除縮放
+    stage.style.removeProperty('--mobile-scale');
+    wrap.style.removeProperty('height');
+    return;
+  }
+  // 手機：依螢幕寬算縮放比例
+  const avail = wrap.clientWidth || (window.innerWidth - 24);
+  const scale = avail / 794;
+  stage.style.setProperty('--mobile-scale', scale.toFixed(4));
+  // transform 後元素仍佔原高，設定 wrapper 高度=縮放後真實高度，消除空白
+  // 用 scrollHeight 取得 stage 未縮放的內容高
+  const realH = stage.scrollHeight;
+  wrap.style.height = Math.ceil(realH * scale) + 'px';
+}
+window.addEventListener('resize', applyMobileScale);
 
 // 渲染後實測：若任一張內容溢出(會壓到footer)，自動縮小該張字體直到裝得下
 function fitAllSheets(){
@@ -603,14 +625,18 @@ $('pdfBtn').addEventListener('click',async()=>{
   const old=btn.innerHTML;
   btn.disabled=true; btn.innerHTML='<span class="dl-icon">⏳</span> 產生中…';
 
-  // 手機上 #stage 可能被 CSS 縮放(transform)，會干擾量測與擷取。
-  // 暫時清除縮放，讓 render/fit/擷取都在原始 794px 尺寸下進行。
+  // 手機上 #stage 被 CSS 縮放(transform)，會干擾量測與擷取。
+  // 用旗標讓 render 期間跳過手機縮放，並強制原始 794px 尺寸。
   const stageEl = $('stage');
+  const wrapEl = document.getElementById('stage-wrap');
   const prevStageStyle = stageEl.getAttribute('style') || '';
-  stageEl.style.transform = 'none';
-  stageEl.style.width = '794px';
-  stageEl.style.margin = '0 auto';
-  stageEl.style.translate = '0';
+  const prevWrapStyle = wrapEl.getAttribute('style') || '';
+  window.__pdfExporting = true;             // 通知 applyMobileScale 跳過
+  stageEl.style.setProperty('transform','none','important');
+  stageEl.style.setProperty('width','794px','important');
+  stageEl.style.removeProperty('--mobile-scale');
+  wrapEl.style.removeProperty('height');
+  wrapEl.style.overflow = 'visible';
 
   render();
   await new Promise(r=>setTimeout(r,250));
@@ -661,8 +687,11 @@ $('pdfBtn').addEventListener('click',async()=>{
     console.error('PDF 產生失敗:', e);
     alert('PDF 產生失敗。可能是函式庫載入中或網路問題，請稍候幾秒再按一次；若持續失敗，可用瀏覽器列印（Ctrl/Cmd+P）另存為 PDF。');
   }finally{
-    // 恢復 #stage 原本樣式(手機縮放預覽)
+    // 清除旗標,恢復 stage/wrap 原本樣式,重新套用手機縮放預覽
+    window.__pdfExporting = false;
     stageEl.setAttribute('style', prevStageStyle);
+    wrapEl.setAttribute('style', prevWrapStyle);
+    applyMobileScale();
     btn.disabled=false; btn.innerHTML=old;
   }
 });
@@ -670,9 +699,9 @@ $('pdfBtn').addEventListener('click',async()=>{
 render();
 // 字體載入完成後版面會變動，重新量測縮放以確保不溢出
 if(document.fonts && document.fonts.ready){
-  document.fonts.ready.then(()=>{ fitAllSheets(); });
+  document.fonts.ready.then(()=>{ fitAllSheets(); applyMobileScale(); });
 }
-window.addEventListener('load',()=>{ setTimeout(fitAllSheets,100); });
+window.addEventListener('load',()=>{ setTimeout(()=>{ fitAllSheets(); applyMobileScale(); },100); });
 </script>
 </body>
 </html>
