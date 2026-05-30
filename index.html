@@ -51,6 +51,8 @@
   .btn-primary:hover{transform:translateY(-2px);background:#1c3d32;}
   .btn-ghost{background:transparent;color:var(--accent-deep);border:1px solid var(--line-strong);}
   .btn-ghost:hover{background:#e7efe9;}
+  .btn-regen{background:var(--accent);color:#fff;border:none;box-shadow:0 6px 16px -6px rgba(35,74,62,.6);}
+  .btn-regen:hover{background:var(--accent-deep);transform:translateY(-1px);}
   .btn-download{
     background:linear-gradient(135deg,#c75a3a 0%,#b03a2e 100%);
     color:#fff;font-size:17px;padding:16px 40px;border-radius:12px;
@@ -68,7 +70,7 @@
   .sheet{background:#fff;width:794px;height:1122px;overflow:hidden;margin:0 auto 26px;padding:54px 60px 46px;position:relative;box-shadow:0 24px 60px -30px rgba(20,40,20,.55);color:#15130f;display:flex;flex-direction:column;break-after:page;}
   .sheet:last-child{break-after:auto;}
   .ws-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
-  .ws-questions{flex:1 1 auto;display:flex;flex-direction:column;justify-content:flex-start;min-height:0;}
+  .ws-questions{flex:1 1 auto;display:flex;flex-direction:column;justify-content:flex-start;gap:var(--row-gap,8px);min-height:0;}
   .ws-head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid var(--rule);padding-bottom:10px;margin-bottom:6px;flex-shrink:0;}
   .ws-head .title{font-family:'Noto Serif TC',serif;font-weight:700;font-size:23px;letter-spacing:.08em;}
   .ws-head .meta{text-align:right;font-size:12px;color:#3a352d;line-height:1.9;}
@@ -76,17 +78,16 @@
   .ws-subbar{display:flex;justify-content:space-between;font-size:12.5px;color:#3a352d;padding:7px 2px 0;letter-spacing:.04em;}
   .instruction{margin:14px 0 12px;font-size:13.5px;line-height:1.7;background:#f1f6f2;border-left:3px solid var(--accent);padding:10px 14px;border-radius:0 6px 6px 0;}
 
-  /* problem rows */
-  .qrow{display:flex;align-items:center;gap:14px;border:1px solid #cfc7b6;border-radius:9px;padding:var(--row-pad,14px) 16px;margin-bottom:var(--row-gap,11px);flex-shrink:0;page-break-inside:avoid;}
-  .ws-questions .qrow:last-child{margin-bottom:0;}
-  .qnum{font-weight:600;color:var(--accent-deep);min-width:30px;font-size:15px;}
-  .expr{font-family:'Noto Serif TC',serif;letter-spacing:.04em;display:inline-flex;align-items:center;gap:4px;font-size:calc(1em * var(--expr-scale,1));}
-  .expr-card{border:1.3px solid #c4bba8;border-radius:8px;padding:6px 16px;background:#fffdf7;min-width:96px;text-align:center;}
+  /* problem rows (尺寸用 em,隨 sheet font-size 等比縮放) */
+  .qrow{display:flex;align-items:center;gap:0.6em;border:1px solid #cfc7b6;border-radius:8px;padding:0.2em 0.7em;flex-shrink:0;page-break-inside:avoid;}
+  .qnum{font-weight:600;color:var(--accent-deep);min-width:1.5em;font-size:0.7em;}
+  .expr{font-family:'Noto Serif TC',serif;letter-spacing:.04em;display:inline-flex;align-items:center;gap:4px;}
+  .expr-card{border:1.2px solid #c4bba8;border-radius:7px;padding:0.16em 0.6em;background:#fffdf7;min-width:3.4em;text-align:center;}
   .expr-card.circled{border:2.5px solid var(--answer);box-shadow:0 0 0 3px rgba(176,58,46,.14);}
-  .vs{font-family:'Noto Serif TC',serif;color:#8a8276;font-size:18px;}
-  .sym-blank{border:1.4px dashed #b8ac95;border-radius:6px;width:46px;height:42px;display:inline-flex;align-items:center;justify-content:center;color:#cfc7b6;font-size:13px;}
+  .vs{font-family:'Noto Serif TC',serif;color:#8a8276;font-size:0.74em;}
+  .sym-blank{border:1.4px dashed #b8ac95;border-radius:6px;width:1.9em;height:1.6em;display:inline-flex;align-items:center;justify-content:center;color:#cfc7b6;font-size:0.6em;}
   .sym-blank .ans{color:var(--answer);font-family:'Noto Serif TC',serif;font-weight:700;}
-  .circle-hint{margin-left:auto;font-size:11.5px;color:#8a8276;}
+  .circle-hint{margin-left:auto;font-size:0.5em;color:#8a8276;}
 
   .ws-foot{flex-shrink:0;margin-top:10px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid #cfc7b6;padding-top:7px;font-size:10.5px;color:#6a6358;letter-spacing:.05em;}
   .ws-foot .designer{font-weight:500;color:#34433c;}
@@ -222,7 +223,7 @@
       <label class="switch"><input type="checkbox" id="showAns" checked>附解答頁</label>
     </div>
     <div class="actions">
-      <button class="btn btn-ghost" id="genBtn">重新生成</button>
+      <button class="btn btn-regen" id="genBtn">↻ 重新生成題目</button>
       <button class="btn btn-download" id="pdfBtn">
         <span class="dl-icon">⬇</span> 下載 PDF
       </button>
@@ -341,48 +342,21 @@ function buildSheet(cfg,sheetIdx){
   // ---- 自適應排版：確保一定不超出 A4 ----
   // sheet 內容區高度 = 1122px - 上54 - 下46 = 1022px
   const A4_CONTENT = 1022;
-  // footer 現為 flex 文檔流，必須計入；各區實測高度 + 加大安全緩衝
-  // (runtime fitAllSheets 會再實測修正，此處保守估算減少縮放介入)
-  let fixed = 60 /*head*/ + 28 /*subbar*/ + 44 /*footer含border+padding+margin*/ + 24 /*安全緩衝*/;
-  if(cfg.showInstr) fixed += 70; // 說明框(含margin)
+  let fixed = 60 /*head*/ + 28 /*subbar*/ + 44 /*footer*/ + 16 /*緩衝*/;
+  if(cfg.showInstr) fixed += 70; // 說明框
   const avail = Math.max(120, A4_CONTENT - fixed);
 
-  let rowPad = 6, rowGap = 8;
-  // 每列在字體 f 下的固有高度：行高(f*1.3) + 卡片內距/邊框約14
-  // (固定開銷調小,讓基準字體在多題時不必大幅縮小)
-  const rowBase = f => Math.round(f*1.3) + 14;
-  let eff = cfg.fsize; // 有效字體
-  // 每列總高 = rowBase + 上下padding(rowPad*2) + 下方間距(rowGap)
-  let need = cfg.perPage * (rowBase(eff) + rowPad*2 + rowGap);
-  // 若超出，先縮間距
-  if(need > avail){
-    rowPad = 3; rowGap = 3;
-    need = cfg.perPage * (rowBase(eff) + rowPad*2 + rowGap);
-  }
-  // 仍超出 → 等比縮小有效字體，直到塞得下（保底 13px）
-  while(need > avail && eff > 13){
+  // 每列最小高度(緊湊) = 字體×1.3 + 內距(rowPad×2) + 邊框 ≈ 字體×1.3 + 16
+  // 求最大可用字體：讓 perPage 題的最小總高 ≤ avail，留 8% 餘裕給間距與誤差
+  const rowPad = 6;
+  const minRowH = f => Math.round(f*1.3) + rowPad*2 + 6; // 含邊框
+  let eff = cfg.fsize;
+  while(eff > 13 && cfg.perPage * minRowH(eff) > avail * 0.94){
     eff -= 1;
-    need = cfg.perPage * (rowBase(eff) + rowPad*2 + rowGap);
-  }
-  // 若空間還寬鬆，把多餘空間平均回填到間距讓版面飽滿（保證不超出）
-  if(eff === cfg.fsize){
-    let slack = avail - need;
-    if(slack > 0){
-      const addPerRow = slack / cfg.perPage;
-      // 間距上限大幅放寬，讓題目能撐滿整頁(題少時間距較大但仍合理)
-      let addPad = Math.floor(addPerRow * 0.35 / 2);
-      let addGap = Math.floor(addPerRow * 0.65);
-      rowPad = Math.min(28, rowPad + addPad);
-      rowGap = Math.min(46, rowGap + addGap);
-      let check = cfg.perPage * (rowBase(eff) + rowPad*2 + rowGap);
-      while(check > avail && (rowGap > 3 || rowPad > 3)){
-        if(rowGap > 3) rowGap--;
-        else if(rowPad > 3) rowPad--;
-        check = cfg.perPage * (rowBase(eff) + rowPad*2 + rowGap);
-      }
-    }
   }
   const exprScale = (eff/cfg.fsize).toFixed(3); // 算式區縮放比例
+  // 題目間距(gap)：依題數給合理初始值,fitAllSheets 會再依實際空間微調
+  const rowGap = cfg.perPage >= 14 ? 6 : (cfg.perPage >= 10 ? 10 : 16);
 
   return `<div class="sheet" style="font-size:${cfg.fsize}px;--row-pad:${rowPad}px;--row-gap:${rowGap}px;--expr-scale:${exprScale};">
     <div class="ws-head">
@@ -541,12 +515,12 @@ function gather(){
 }
 // 依每張題數自動決定基準字體：題少字大、題多字小
 function fsizeForPerPage(pp){
-  if(pp <= 6) return 34;
-  if(pp <= 8) return 31;
-  if(pp <= 10) return 28;
-  if(pp <= 12) return 25;
-  if(pp <= 14) return 23;
-  return 21; // 16 題
+  if(pp <= 6) return 50;
+  if(pp <= 8) return 42;
+  if(pp <= 10) return 34;
+  if(pp <= 12) return 30;
+  if(pp <= 14) return 27;
+  return 25; // 16 題(實際會由 fitAllSheets 依空間決定,約17-18px)
 }
 function render(){
   $('stage').innerHTML=buildAll(gather());
@@ -577,44 +551,54 @@ function applyMobileScale(){
 }
 window.addEventListener('resize', applyMobileScale);
 
-// 渲染後實測：若任一張內容溢出(會壓到footer)，自動縮小該張字體直到裝得下
+// 渲染後實測：用「最後一題底部 vs 頁尾頂部」判斷真實溢出。
+// 1) 若溢出 → 縮小字體直到不溢出
+// 2) 若有剩餘空間 → 放大字體填滿(但不超過原始基準字體)
 function fitAllSheets(){
   const sheets=document.querySelectorAll('#stage .sheet');
   sheets.forEach(sheet=>{
     const body=sheet.querySelector('.ws-body');
     if(!body) return;
     const qbox=sheet.querySelector('.ws-questions');
-    // 偵測溢出函式：
-    // 工作單(有.ws-questions)→ 題目自然總高 vs 容器可用高；解答頁→ body scrollHeight
-    const overflow=()=>{
-      if(qbox){
-        // qbox 內容自然總高(含 qrow margin) vs qbox 可用高度
-        return qbox.scrollHeight > qbox.clientHeight + 2;
+
+    if(qbox){
+      // 工作單：縮放整個 sheet 的 font-size(各元素用 em,整列等比變化)
+      const rows=qbox.querySelectorAll('.qrow');
+      if(!rows.length) return;
+      const footTop=()=> sheet.querySelector('.ws-foot').getBoundingClientRect().top;
+      const lastBottom=()=> rows[rows.length-1].getBoundingClientRect().bottom;
+      let fs=parseFloat(sheet.style.fontSize)||24;
+      const baseFs=fs;
+      let guard=0;
+      // 縮小直到最後一題不壓到頁尾(留 8px 餘裕)
+      while(lastBottom() > footTop()-8 && fs>10 && guard<200){
+        fs-=0.5;
+        sheet.style.fontSize=fs+'px';
+        guard++;
       }
-      return body.scrollHeight > body.clientHeight + 1;
-    };
-    let scale=parseFloat(sheet.style.getPropertyValue('--expr-scale'))||1;
-    let guard=0;
-    while(overflow() && guard < 60){
-      scale -= 0.04;
-      if(scale < 0.3) scale = 0.3;
-      sheet.style.setProperty('--expr-scale', scale.toFixed(3));
-      const curGap=parseFloat(sheet.style.getPropertyValue('--row-gap'))||9;
-      const curPad=parseFloat(sheet.style.getPropertyValue('--row-pad'))||8;
-      if(curGap>2) sheet.style.setProperty('--row-gap',(curGap-1)+'px');
-      if(curPad>2) sheet.style.setProperty('--row-pad',(curPad-1)+'px');
-      // 解答頁:縮小答案字體
-      const ansItems=body.querySelectorAll('.ans-item');
-      if(ansItems.length){
+      // 放大填滿(上限為基準字體,不超過設定值)
+      guard=0;
+      while(fs < baseFs && lastBottom() < footTop()-18 && guard<120){
+        const prev=fs;
+        fs+=0.5;
+        sheet.style.fontSize=fs+'px';
+        if(lastBottom() > footTop()-8){ sheet.style.fontSize=prev+'px'; break; }
+        guard++;
+      }
+    }else{
+      // 解答頁：用 body scrollHeight 判斷
+      let guard=0;
+      while(body.scrollHeight > body.clientHeight+1 && guard<60){
+        const ansItems=body.querySelectorAll('.ans-item');
+        if(!ansItems.length)break;
         ansItems.forEach(it=>{
           const fs=parseFloat(it.style.fontSize)||20;
           const lh=parseFloat(it.style.lineHeight)||fs*1.8;
           it.style.fontSize=Math.max(11,fs-1)+'px';
           it.style.lineHeight=Math.max(16,lh-2)+'px';
         });
+        guard++;
       }
-      guard++;
-      if(scale<=0.3 && curGap<=2 && curPad<=2) break;
     }
   });
 }
