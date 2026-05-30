@@ -81,7 +81,7 @@
   .ws-questions .qrow:last-child{margin-bottom:0;}
   .qnum{font-weight:600;color:var(--accent-deep);min-width:30px;font-size:15px;}
   .expr{font-family:'Noto Serif TC',serif;letter-spacing:.04em;display:inline-flex;align-items:center;gap:4px;font-size:calc(1em * var(--expr-scale,1));}
-  .expr-card{border:1.3px solid #c4bba8;border-radius:8px;padding:8px 16px;background:#fffdf7;min-width:96px;text-align:center;}
+  .expr-card{border:1.3px solid #c4bba8;border-radius:8px;padding:6px 16px;background:#fffdf7;min-width:96px;text-align:center;}
   .expr-card.circled{border:2.5px solid var(--answer);box-shadow:0 0 0 3px rgba(176,58,46,.14);}
   .vs{font-family:'Noto Serif TC',serif;color:#8a8276;font-size:18px;}
   .sym-blank{border:1.4px dashed #b8ac95;border-radius:6px;width:46px;height:42px;display:inline-flex;align-items:center;justify-content:center;color:#cfc7b6;font-size:13px;}
@@ -347,9 +347,10 @@ function buildSheet(cfg,sheetIdx){
   if(cfg.showInstr) fixed += 70; // 說明框(含margin)
   const avail = Math.max(120, A4_CONTENT - fixed);
 
-  let rowPad = 8, rowGap = 9;
-  // 每列在字體 f 下的固有高度：行高(f*1.4) + 卡片內距16 + 邊框約4 + margin-bottom另計
-  const rowBase = f => Math.round(f*1.4) + 20;
+  let rowPad = 6, rowGap = 8;
+  // 每列在字體 f 下的固有高度：行高(f*1.3) + 卡片內距/邊框約14
+  // (固定開銷調小,讓基準字體在多題時不必大幅縮小)
+  const rowBase = f => Math.round(f*1.3) + 14;
   let eff = cfg.fsize; // 有效字體
   // 每列總高 = rowBase + 上下padding(rowPad*2) + 下方間距(rowGap)
   let need = cfg.perPage * (rowBase(eff) + rowPad*2 + rowGap);
@@ -541,11 +542,11 @@ function gather(){
 // 依每張題數自動決定基準字體：題少字大、題多字小
 function fsizeForPerPage(pp){
   if(pp <= 6) return 34;
-  if(pp <= 8) return 30;
-  if(pp <= 10) return 26;
-  if(pp <= 12) return 23;
-  if(pp <= 14) return 20;
-  return 18; // 16 題
+  if(pp <= 8) return 31;
+  if(pp <= 10) return 28;
+  if(pp <= 12) return 25;
+  if(pp <= 14) return 23;
+  return 21; // 16 題
 }
 function render(){
   $('stage').innerHTML=buildAll(gather());
